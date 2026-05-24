@@ -22,6 +22,12 @@
 
 ---
 
+## 📸 Dashboard Preview
+
+![API Health Monitor Dashboard](api.png)
+
+---
+
 ## 🔥 Features
 
 | Feature | Description |
@@ -36,3 +42,4 @@
 | 📖 Swagger Docs | Auto-generated API documentation at `/docs` |
 
 ---
+
