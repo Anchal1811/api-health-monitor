@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Health Monitor</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        header {
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        header h1 { font-size: 1.2rem; font-weight: 600; color: #f8fafc; }
+        header .refresh-info { font-size: 0.78rem; color: #64748b; }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+        }
+        .stat-card .label {
+            font-size: 0.75rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.5rem;
+        }
+        .stat-card .value {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: #f8fafc;
+            line-height: 1;
+        }
+        .stat-card .value.green { color: #34d399; }
+        .stat-card .value.red   { color: #f87171; }
+        .stat-card .value.blue  { color: #60a5fa; }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .toolbar h2 { font-size: 1rem; font-weight: 600; color: #f8fafc; }
+
+        .btn-primary {
+            background: #6366f1;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 0.55rem 1.2rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-primary:hover { background: #4f46e5; }
+
+        .table-wrap {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        thead tr { background: #0f172a; }
+        thead th {
+            padding: 0.8rem 1rem;
+            text-align: left;
+            color: #64748b;
+            font-size: 0.72rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        tbody tr { border-top: 1px solid #1e293b; transition: background 0.1s; }
+        tbody tr:hover { background: #263044; }
+        tbody td { padding: 0.9rem 1rem; color: #cbd5e1; vertical-align: middle; }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 0.25rem 0.7rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge.up     { background: rgba(52,211,153,0.12); color: #34d399; }
+        .badge.down   { background: rgba(248,113,113,0.12); color: #f87171; }
+        .badge.unknown{ background: rgba(148,163,184,0.12); color: #94a3b8; }
+
+        .dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .dot.up     { background: #34d399; box-shadow: 0 0 5px #34d399; }
+        .dot.down   { background: #f87171; box-shadow: 0 0 5px #f87171; }
+        .dot.unknown{ background: #94a3b8; }
+
+        .url-text {
+            color: #818cf8;
+            font-size: 0.8rem;
+            max-width: 240px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+        }
+
+        .bar-wrap { width: 70px; height: 5px; background: #334155; border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 6px; }
+        .bar-fill { height: 100%; border-radius: 3px; background: #6366f1; }
+
+        .action-btn {
+            background: transparent;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            border-radius: 6px;
+            padding: 0.3rem 0.65rem;
+            font-size: 0.77rem;
+            cursor: pointer;
+            margin-right: 4px;
+            transition: all 0.15s;
+        }
+        .action-btn:hover { border-color: #6366f1; color: #a5b4fc; }
+        .action-btn.del:hover { border-color: #f87171; color: #f87171; }
+
+        .empty {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: #475569;
+        }
+        .empty strong { display: block; margin-bottom: 0.4rem; color: #64748b; }
+
+        /* Modal */
+        .overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.65);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        .overlay.open { display: flex; }
+        .modal {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 14px;
+            padding: 1.75rem;
+            width: 430px;
+            max-width: 95vw;
+        }
+        .modal h3 { font-size: 1rem; font-weight: 600; color: #f8fafc; margin-bottom: 1.25rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; font-size: 0.78rem; color: #94a3b8; margin-bottom: 0.4rem; }
+        .form-group input {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 0.6rem 0.9rem;
+            color: #f8fafc;
+            font-size: 0.875rem;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .form-group input:focus { border-color: #6366f1; }
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            margin-top: 1.25rem;
+        }
+        .btn-cancel {
+            background: transparent;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            border-radius: 8px;
+            padding: 0.55rem 1rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+        .btn-cancel:hover { border-color: #94a3b8; color: #e2e8f0; }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 9px;
+            padding: 0.8rem 1.25rem;
+            font-size: 0.875rem;
+            color: #f8fafc;
+            z-index: 300;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: all 0.25s;
+            pointer-events: none;
+        }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.success { border-left: 3px solid #34d399; }
+        .toast.error   { border-left: 3px solid #f87171; }
+
+        /* History modal */
+        .history-list { max-height: 340px; overflow-y: auto; margin-top: 0.75rem; }
+        .history-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0.55rem 0;
+            border-bottom: 1px solid #334155;
+            font-size: 0.82rem;
+            color: #94a3b8;
+        }
+        .history-item:last-child { border-bottom: none; }
+        .history-item .time { color: #64748b; min-width: 80px; font-size: 0.75rem; }
+        .history-item .code { min-width: 40px; text-align: center; }
+        .history-item .ms   { color: #818cf8; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>⬡ API Health Monitor</h1>
+    <span class="refresh-info" id="refresh-ts">Loading...</span>
+</header>
+
+<div class="container">
+
+    <!-- Stats Row -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="label">Total Endpoints</div>
+            <div class="value blue" id="s-total">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Endpoints Up</div>
+            <div class="value green" id="s-up">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Endpoints Down</div>
+            <div class="value red" id="s-down">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Total Pings</div>
+            <div class="value" id="s-pings">—</div>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="toolbar">
+        <h2>Monitored Endpoints</h2>
+        <button class="btn-primary" onclick="openAdd()">+ Add Endpoint</button>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Status</th>
+                    <th>Name</th>
+                    <th>URL</th>
+                    <th>Interval</th>
+                    <th>Uptime</th>
+                    <th>Avg Response</th>
+                    <th>Last Checked</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+        </table>
+    </div>
+
+</div>
+
+<!-- Add Modal -->
+<div class="overlay" id="add-overlay">
+    <div class="modal">
+        <h3>Add New Endpoint</h3>
+        <div class="form-group">
+            <label>Name</label>
+            <input id="f-name" type="text" placeholder="My API" />
+        </div>
+        <div class="form-group">
+            <label>URL</label>
+            <input id="f-url" type="url" placeholder="https://api.example.com/health" />
+        </div>
+        <div class="form-group">
+            <label>Check Interval (minutes)</label>
+            <input id="f-interval" type="number" value="5" min="1" max="1440" />
+        </div>
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="closeAdd()">Cancel</button>
+            <button class="btn-primary" onclick="submitAdd()">Add & Monitor</button>
+        </div>
+    </div>
+</div>
+
+<!-- History Modal -->
+<div class="overlay" id="hist-overlay">
+    <div class="modal">
+        <h3 id="hist-title">Ping History</h3>
+        <div class="history-list" id="hist-list"></div>
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="closeHist()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';
+
+/* ── Stats ── */
+async function loadStats() {
+    try {
+        const r = await fetch(`${API}/stats/`);
+        const d = await r.json();
+        document.getElementById('s-total').textContent = d.total_endpoints;
+        document.getElementById('s-up').textContent    = d.endpoints_up;
+        document.getElementById('s-down').textContent  = d.endpoints_down;
+        document.getElementById('s-pings').textContent = d.total_pings_recorded.toLocaleString();
+    } catch(e) {}
+}
+
+/* ── Endpoints Table ── */
+async function loadEndpoints() {
+    const tbody = document.getElementById('tbody');
+    try {
+        const r  = await fetch(`${API}/endpoints/`);
+        const eps = await r.json();
+
+        if (!eps.length) {
+            tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>No endpoints yet</strong>Click "Add Endpoint" to start monitoring.</div></td></tr>`;
+            return;
+        }
+
+        const rows = await Promise.all(eps.map(async ep => {
+            let st = null;
+            try {
+                const sr = await fetch(`${API}/endpoints/${ep.id}/stats`);
+                st = await sr.json();
+            } catch(e) {}
+
+            const status   = st ? st.current_status : 'UNKNOWN';
+            const cls      = status === 'UP' ? 'up' : status === 'DOWN' ? 'down' : 'unknown';
+            const uptime   = st ? st.uptime_percent.toFixed(1) + '%' : '—';
+            const avgMs    = st && st.avg_response_ms != null ? st.avg_response_ms.toFixed(0) + ' ms' : '—';
+            const barW     = st && st.avg_response_ms ? Math.min(100, (st.avg_response_ms / 2000) * 100).toFixed(0) : 0;
+            const lastChk  = st && st.last_checked
+                ? new Date(st.last_checked + 'Z').toLocaleTimeString()
+                : '—';
+
+            return `
+            <tr>
+                <td><span class="badge ${cls}"><span class="dot ${cls}"></span>${status}</span></td>
+                <td style="font-weight:500;color:#f8fafc;">${ep.name}</td>
+                <td><span class="url-text" title="${ep.url}">${ep.url}</span></td>
+                <td style="color:#64748b;">${ep.interval_mins}m</td>
+                <td>${uptime}</td>
+                <td>
+                    ${avgMs}
+                    <span class="bar-wrap"><span class="bar-fill" style="width:${barW}%"></span></span>
+                </td>
+                <td style="color:#64748b;font-size:0.8rem;">${lastChk}</td>
+                <td>
+                    <button class="action-btn" onclick="openHist(${ep.id},'${ep.name.replace(/'/g,"\\'")}')">History</button>
+                    <button class="action-btn del" onclick="delEndpoint(${ep.id},'${ep.name.replace(/'/g,"\\'")}')">Delete</button>
+                </td>
+            </tr>`;
+        }));
+
+        tbody.innerHTML = rows.join('');
+    } catch(e) {
+        tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>Could not connect to server</strong>Make sure uvicorn is running.</div></td></tr>`;
+    }
+}
+
+/* ── Add Endpoint ── */
+function openAdd() {
+    document.getElementById('f-name').value     = '';
+    document.getElementById('f-url').value      = '';
+    document.getElementById('f-interval').value = 5;
+    document.getElementById('add-overlay').classList.add('open');
+}
+function closeAdd() {
+    document.getElementById('add-overlay').classList.remove('open');
+}
+async function submitAdd() {
+    const name     = document.getElementById('f-name').value.trim();
+    const url      = document.getElementById('f-url').value.trim();
+    const interval = parseInt(document.getElementById('f-interval').value) || 5;
+    if (!name || !url) { toast('Please fill in Name and URL.', 'error'); return; }
+    try {
+        const r = await fetch(`${API}/endpoints/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, url, interval_mins: interval })
+        });
+        if (r.ok) {
+            toast(`"${name}" added successfully!`, 'success');
+            closeAdd();
+            refresh();
+        } else {
+            const err = await r.json();
+            toast(err.detail || 'Failed to add.', 'error');
+        }
+    } catch(e) {
+        toast('Server error. Is uvicorn running?', 'error');
+    }
+}
+
+/* ── Delete ── */
+async function delEndpoint(id, name) {
+    if (!confirm(`Delete "${name}" and all its logs?`)) return;
+    try {
+        await fetch(`${API}/endpoints/${id}`, { method: 'DELETE' });
+        toast(`"${name}" deleted.`, 'success');
+        refresh();
+    } catch(e) {
+        toast('Delete failed.', 'error');
+    }
+}
+
+/* ── History Modal ── */
+async function openHist(id, name) {
+    document.getElementById('hist-title').textContent = `History — ${name}`;
+    document.getElementById('hist-list').innerHTML    = '<div style="color:#64748b;padding:1rem 0;">Loading...</div>';
+    document.getElementById('hist-overlay').classList.add('open');
+    try {
+        const r    = await fetch(`${API}/endpoints/${id}/history?limit=20`);
+        const logs = await r.json();
+        if (!logs.length) {
+            document.getElementById('hist-list').innerHTML = '<div style="color:#64748b;padding:1rem 0;">No logs yet.</div>';
+            return;
+        }
+        document.getElementById('hist-list').innerHTML = logs.map(l => {
+            const cls  = l.is_up ? 'up' : 'down';
+            const time = new Date(l.checked_at + 'Z').toLocaleTimeString();
+            const code = l.status_code || '—';
+            const ms   = l.response_ms != null ? l.response_ms.toFixed(0) + ' ms' : l.error_msg || '—';
+            return `<div class="history-item">
+                <span class="dot ${cls}"></span>
+                <span class="time">${time}</span>
+                <span class="badge ${cls} code">${l.is_up ? 'UP' : 'DOWN'}</span>
+                <span class="code" style="color:#94a3b8;">${code}</span>
+                <span class="ms">${ms}</span>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        document.getElementById('hist-list').innerHTML = '<div style="color:#f87171;padding:1rem 0;">Failed to load history.</div>';
+    }
+}
+function closeHist() {
+    document.getElementById('hist-overlay').classList.remove('open');
+}
+
+/* ── Toast ── */
+function toast(msg, type = 'success') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className   = `toast ${type} show`;
+    setTimeout(() => { el.className = 'toast'; }, 3000);
+}
+
+/* ── Close overlays on backdrop click ── */
+document.getElementById('add-overlay').addEventListener('click', e => { if (e.target.id === 'add-overlay') closeAdd(); });
+document.getElementById('hist-overlay').addEventListener('click', e => { if (e.target.id === 'hist-overlay') closeHist(); });
+
+/* ── Auto refresh ── */
+function refresh() {
+    loadStats();
+    loadEndpoints();
+    document.getElementById('refresh-ts').textContent = 'Last refresh: ' + new Date().toLocaleTimeString();
+}
+
+refresh();
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>
